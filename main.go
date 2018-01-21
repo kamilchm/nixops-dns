@@ -50,7 +50,7 @@ func handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	ip, err := nixopsHostIp(strings.TrimSuffix(q.Name, "."))
+	ip, err := nixopsHostIp(strings.TrimSuffix(q.Name, ".ops."))
 	if err != nil {
 		log.Println(err)
 		handleNotFound(w, r)
@@ -75,6 +75,8 @@ func handleNotFound(w dns.ResponseWriter, r *dns.Msg) {
 
 func main() {
 	var addr = flag.String("addr", "127.0.0.1:5300", "listen address")
+	// var domain = flag.String("domain", "ops", "fake domain name to strip from requests e.g. host.ops -> host")
+	// XXX: how to pass this to handleRequest, use ServeMux?
 
 	flag.Parse()
 

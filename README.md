@@ -50,3 +50,27 @@ is to add it to **DNSMASQ** config:
 server=/./127.0.0.1#5300
 ```
 
+#### Fake domains
+
+**NixOps-DNS** can translate fake development domains like `.dev` or `.ops` if you
+want to use it along with other DNS servers and route only part of the queries to it.
+
+Start **NixOps-DNS** with the `domain`  switch:
+
+```
+nixops-dns -domain=.ops
+```
+
+Modify **DNSMASQ** config:
+
+```
+server=/ops/127.0.0.1#5300
+```
+
+and you can query **NixOps** machines under `.ops` domain:
+
+```
+$ dig +short proxy.ops
+192.168.56.103
+```
+

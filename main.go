@@ -40,30 +40,32 @@ func nixopsHostIp(hostname string) (net.IP, error) {
 	return net.ParseIP(ip), nil
 }
 
-func handleRequest(w dns.ResponseWriter, r *dns.Msg) {
-	q := r.Question[0]
+func domainHandler(domain string) func(dns.ResponseWriter, *dns.Msg) {
+	return func(w dns.ResponseWriter, r *dns.Msg) {
+		q := r.Question[0]
 
-	log.Printf("Question: Type=%s Class=%s Name=%s\n", dns.TypeToString[q.Qtype], dns.ClassToString[q.Qclass], q.Name)
+		log.Printf("Question: Type=%s Class=%s Name=%s\n", dns.TypeToString[q.Qtype], dns.ClassToString[q.Qclass], q.Name)
 
-	if q.Qtype != dns.TypeA || q.Qclass != dns.ClassINET {
-		handleNotFound(w, r)
-		return
+		if q.Qtype != dns.TypeA || q.Qclass != dns.ClassINET {
+			handleNotFound(w, r)
+			return
+		}
+
+		ip, err := nixopsHostIp(strings.TrimSuffix(q.Name, fmt.Sprintf("%s.", domain)))
+		if err != nil {
+			log.Println(err)
+			handleNotFound(w, r)
+			return
+		}
+
+		m := new(dns.Msg)
+		m.SetReply(r)
+		a := new(dns.A)
+		a.Hdr = dns.RR_Header{Name: q.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 30}
+		a.A = ip
+		m.Answer = []dns.RR{a}
+		w.WriteMsg(m)
 	}
-
-	ip, err := nixopsHostIp(strings.TrimSuffix(q.Name, "."))
-	if err != nil {
-		log.Println(err)
-		handleNotFound(w, r)
-		return
-	}
-
-	m := new(dns.Msg)
-	m.SetReply(r)
-	a := new(dns.A)
-	a.Hdr = dns.RR_Header{Name: q.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 30}
-	a.A = ip
-	m.Answer = []dns.RR{a}
-	w.WriteMsg(m)
 }
 
 func handleNotFound(w dns.ResponseWriter, r *dns.Msg) {
@@ -75,6 +77,8 @@ func handleNotFound(w dns.ResponseWriter, r *dns.Msg) {
 
 func main() {
 	var addr = flag.String("addr", "127.0.0.1:5300", "listen address")
+	var domain = flag.String("domain", "",
+		"fake domain name to strip from requests e.g. host.ops -> host if -domain=.ops")
 
 	flag.Parse()
 
@@ -82,7 +86,7 @@ func main() {
 	defer nixopsStateDb.Close()
 
 	server := &dns.Server{Addr: *addr, Net: "udp"}
-	server.Handler = dns.HandlerFunc(handleRequest)
+	server.Handler = dns.HandlerFunc(domainHandler(*domain))
 
 	log.Printf("Listening on %s\n", *addr)
 	log.Fatal(server.ListenAndServe())
